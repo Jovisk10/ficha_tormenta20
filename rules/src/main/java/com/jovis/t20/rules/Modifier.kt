@@ -8,6 +8,12 @@ sealed interface StatTarget {
     data object MaxMp : StatTarget
     data object Defense : StatTarget
     data object SpellDc : StatTarget
+    /** Bônus em todos os testes de ataque. */
+    data object Attack : StatTarget
+    /** Bônus em todas as rolagens de dano de armas. */
+    data object WeaponDamage : StatTarget
+    /** Limite de carga em espaços. */
+    data object LoadLimit : StatTarget
 }
 
 enum class SourceType { BASE, RACE, ORIGIN, CLASS, ABILITY, POWER, ITEM, CONDITION, LEVEL, MANUAL }

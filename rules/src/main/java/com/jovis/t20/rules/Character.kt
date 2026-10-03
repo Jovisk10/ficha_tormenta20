@@ -17,11 +17,18 @@ data class Character(
     /** Perícias escolhidas da lista da classe (as fixas da classe entram sozinhas). */
     val classSkillChoices: Set<Skill>,
     val origin: OriginSelection,
+    val deity: Deity? = null,
     /** Perícias extras por Inteligência positiva. */
     val intelligenceSkills: Set<Skill> = emptySet(),
     /** Poderes gerais escolhidos fora da origem. */
     val generalPowers: Set<GeneralPower> = emptySet(),
+    /** Tudo o que o personagem carrega, inclusive a armadura vestida. */
+    val inventory: List<InventoryEntry> = emptyList(),
+    /** Armadura vestida (deve estar também no inventário). */
     val armor: ArmorDefinition? = null,
+    val spellSchools: Set<SpellSchool> = emptySet(),
+    /** Magias aprendidas pela classe (as de raça entram sozinhas). */
+    val classSpells: Set<SpellDefinition> = emptySet(),
     val manualModifiers: List<Modifier> = emptyList(),
 ) {
     init {

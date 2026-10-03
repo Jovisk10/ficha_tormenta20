@@ -4,6 +4,7 @@ package com.jovis.t20.rules
 sealed interface RaceSelection {
     val raceName: String
     val abilities: List<Ability>
+    val grantedSpells: List<GrantedSpell> get() = emptyList()
     fun modifiers(): List<Modifier>
 }
 
@@ -20,6 +21,11 @@ data object Dahllan : RaceSelection {
         Ability.AMIGA_DAS_PLANTAS,
         Ability.ARMADURA_DE_ALLIHANNA,
         Ability.EMPATIA_SELVAGEM,
+    )
+
+    /** Amiga das Plantas: Controlar Plantas (Sab); se aprender de novo, custo –1 PM. */
+    override val grantedSpells = listOf(
+        GrantedSpell(Spells.CONTROLAR_PLANTAS, Ability.AMIGA_DAS_PLANTAS, Attribute.SABEDORIA, relearnDiscount = 1),
     )
 
     override fun modifiers(): List<Modifier> {
