@@ -14,6 +14,15 @@ data class ArmorDefinition(
     val metal: Boolean,
 ) : Item
 
+/** Escudos: bônus na Defesa acumula com armadura (p. 152). */
+data class ShieldDefinition(
+    override val name: String,
+    val defenseBonus: Int,
+    val armorPenalty: Int,
+    override val slots: Double,
+    val metal: Boolean,
+) : Item
+
 object Armors {
     val ARMADURA_ACOLCHOADA = ArmorDefinition("Armadura acolchoada", ArmorCategory.LIGHT, 1, 0, 2.0, metal = false)
     val ARMADURA_DE_COURO = ArmorDefinition("Armadura de couro", ArmorCategory.LIGHT, 2, 0, 2.0, metal = false)
@@ -25,5 +34,10 @@ object Armors {
     val LORIGA_SEGMENTADA = ArmorDefinition("Loriga segmentada", ArmorCategory.HEAVY, 7, -3, 5.0, metal = true)
     val MEIA_ARMADURA = ArmorDefinition("Meia armadura", ArmorCategory.HEAVY, 8, -4, 5.0, metal = true)
     val ARMADURA_COMPLETA = ArmorDefinition("Armadura completa", ArmorCategory.HEAVY, 10, -5, 5.0, metal = true)
-    // TODO: escudos (bônus na Defesa, penalidade e proficiência) na próxima rodada.
+}
+
+object Shields {
+    /** Permitido para devotos de Allihanna (p. 97), logo não é de metal. */
+    val ESCUDO_LEVE = ShieldDefinition("Escudo leve", defenseBonus = 1, armorPenalty = -1, slots = 1.0, metal = false)
+    val ESCUDO_PESADO = ShieldDefinition("Escudo pesado", defenseBonus = 2, armorPenalty = -2, slots = 2.0, metal = true)
 }

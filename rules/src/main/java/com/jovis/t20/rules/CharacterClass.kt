@@ -23,7 +23,13 @@ data class ClassDefinition(
     val spellcasting: Spellcasting? = null,
     /** Divindades permitidas, se a classe exige devoção (null = não exige). */
     val allowedDeities: Set<String>? = null,
-)
+    /** Nível em que a classe ganha o primeiro poder de classe; depois, um por nível. */
+    val firstClassPowerLevel: Int? = null,
+    /** Quantos poderes concedidos a classe recebe pela devoção (Druida: 2, por Devoto Fiel). */
+    val grantedPowerCount: Int = 0,
+) {
+    fun classPowersAt(level: Int): Int = firstClassPowerLevel?.let { maxOf(0, level - it + 1) } ?: 0
+}
 
 object Classes {
     /** Fonte: Tormenta 20 Jogo do Ano, p. 61-63. */
@@ -54,5 +60,7 @@ object Classes {
             circleUnlockLevel = mapOf(1 to 1, 2 to 6, 3 to 10, 4 to 14),
         ),
         allowedDeities = setOf("Allihanna", "Megalokk", "Oceano"),
+        firstClassPowerLevel = 2,
+        grantedPowerCount = 2,
     )
 }

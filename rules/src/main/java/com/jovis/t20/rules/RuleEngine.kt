@@ -95,15 +95,33 @@ object RuleEngine {
 
     fun isProficient(character: Character, weapon: WeaponDefinition): Boolean =
         weapon.proficiency == WeaponProficiency.SIMPLE ||
+            weapon.proficiency == WeaponProficiency.NATURAL ||
             weapon.proficiency in character.characterClass.weaponProficiencies
 
     fun isProficient(character: Character, armor: ArmorDefinition): Boolean =
         armor.category == ArmorCategory.LIGHT ||
             armor.category in character.characterClass.armorProficiencies
 
+    fun isProficientWithShields(character: Character): Boolean = character.characterClass.shieldProficiency
+
+    // ---------- Forma selvagem (p. 62-63) ----------
+
+    fun isInWildShape(character: Character): Boolean = character.activeWildShape != null
+
+    /** Em forma selvagem, itens empunhados somem: armas e escudo não valem. */
+    fun canUseWieldedItems(character: Character): Boolean = !isInWildShape(character)
+
+    /** Em forma selvagem, só com Magia Natural. */
+    fun canCastSpells(character: Character): Boolean =
+        !isInWildShape(character) || DruidPowers.MagiaNatural in allPowers(character)
+
+    /** Escudo que está valendo agora (nenhum em forma selvagem). */
+    fun activeShield(character: Character): ShieldDefinition? =
+        character.shield.takeIf { canUseWieldedItems(character) }
+
     // ---------- Defesa (p. 106 e p. 152) ----------
 
-    /** 10 + Destreza + bônus de armadura. Armaduras pesadas não somam Destreza (p. 152). */
+    /** 10 + Destreza + armadura + escudo. Armaduras pesadas não somam Destreza (p. 152). */
     fun defense(character: Character): DerivedValue {
         val armor = character.armor
         val parts = mutableListOf(Contribution("Base", 10, Source(SourceType.BASE, "Regra de Defesa")))
@@ -113,7 +131,32 @@ object RuleEngine {
             parts += Contribution("Destreza", attrValue(character, Attribute.DESTREZA), Source(SourceType.BASE, "Destreza"))
         }
         armor?.let { parts += Contribution(it.name, it.defenseBonus, Source(SourceType.ITEM, it.name)) }
+        activeShield(character)?.let { parts += Contribution(it.name, it.defenseBonus, Source(SourceType.ITEM, it.name)) }
         return build(parts, modifiersFor(character, StatTarget.Defense))
+    }
+
+    fun damageReduction(character: Character): DerivedValue =
+        build(emptyList(), modifiersFor(character, StatTarget.DamageReduction))
+
+    // ---------- Deslocamento (p. 141, 152, 238) ----------
+
+    /** 9m padrão; armadura pesada –3m; sobrecarregado –3m. Forma Veloz pode trocar o valor base. */
+    fun speed(character: Character): DerivedValue {
+        val override = character.activeWildShape?.let { WildShape.groundSpeedOverride(it) }
+        val parts = mutableListOf(
+            if (override != null) {
+                Contribution("Forma Selvagem (Veloz)", override, Source(SourceType.CONDITION, "Forma Selvagem"))
+            } else {
+                Contribution("Padrão", 9, Source(SourceType.BASE, "Deslocamento padrão"))
+            },
+        )
+        character.armor?.takeIf { it.category == ArmorCategory.HEAVY }?.let {
+            parts += Contribution("Armadura pesada", -3, Source(SourceType.ITEM, it.name))
+        }
+        if (isOverloaded(character)) {
+            parts += Contribution("Sobrecarregado", -3, Source(SourceType.CONDITION, "Sobrecarregado"))
+        }
+        return build(parts, modifiersFor(character, StatTarget.Speed))
     }
 
     // ---------- Carga (p. 141) ----------
@@ -153,29 +196,41 @@ object RuleEngine {
     /** Perícias "somente treinadas" não podem ser usadas sem treino, mesmo tendo valor calculado. */
     fun canUse(character: Character, skill: Skill): Boolean = !skill.trainedOnly || isTrained(character, skill)
 
+    /** O atributo usado na perícia: o padrão ou uma alternativa dada por poder, o que for maior. */
+    fun skillAttribute(character: Character, skill: Skill): Attribute {
+        val options = setOf(skill.keyAttribute) + allPowers(character).mapNotNull { it.skillAttributeOptions[skill] }
+        return options.maxBy { attrValue(character, it) }
+    }
+
     /** Metade do nível + atributo-chave + bônus de treinamento (se treinado) + penalidades. */
     fun skill(character: Character, skill: Skill): DerivedValue {
+        val attribute = skillAttribute(character, skill)
+        val attributeLabel = if (attribute == skill.keyAttribute) attribute.displayName
+        else "${attribute.displayName} (no lugar de ${skill.keyAttribute.displayName})"
+
         val parts = mutableListOf(
             Contribution("Metade do nível", halfLevel(character), Source(SourceType.LEVEL, "Nível ${character.level}")),
-            Contribution(
-                skill.keyAttribute.displayName,
-                attrValue(character, skill.keyAttribute),
-                Source(SourceType.BASE, skill.keyAttribute.displayName),
-            ),
+            Contribution(attributeLabel, attrValue(character, attribute), Source(SourceType.BASE, attribute.displayName)),
         )
         if (isTrained(character, skill)) {
             parts += Contribution("Treinamento", trainingBonus(character), Source(SourceType.LEVEL, "Treinamento"))
         }
 
-        // Penalidade de armadura: perícias marcadas com "armadura" (p. 115) e, sem proficiência,
-        // todas as perícias de Força e Destreza (p. 152). Aplicada uma única vez.
-        val armor = character.armor
-        if (armor != null && armor.armorPenalty != 0) {
-            val nonProficient = !isProficient(character, armor) &&
-                skill.keyAttribute in setOf(Attribute.FORCA, Attribute.DESTREZA)
+        // Penalidade de armadura e escudo: perícias marcadas com "armadura" (p. 115) e, sem proficiência,
+        // todas as perícias de Força e Destreza (p. 152).
+        val strOrDex = skill.keyAttribute in setOf(Attribute.FORCA, Attribute.DESTREZA)
+        character.armor?.takeIf { it.armorPenalty != 0 }?.let { armor ->
+            val nonProficient = strOrDex && !isProficient(character, armor)
             if (skill.armorPenalty || nonProficient) {
-                val label = if (nonProficient && !skill.armorPenalty) "Armadura sem proficiência" else "Penalidade de armadura"
+                val label = if (!skill.armorPenalty) "Armadura sem proficiência" else "Penalidade de armadura"
                 parts += Contribution(label, armor.armorPenalty, Source(SourceType.ITEM, armor.name))
+            }
+        }
+        activeShield(character)?.takeIf { it.armorPenalty != 0 }?.let { shield ->
+            val nonProficient = strOrDex && !isProficientWithShields(character)
+            if (skill.armorPenalty || nonProficient) {
+                val label = if (!skill.armorPenalty) "Escudo sem proficiência" else "Penalidade de escudo"
+                parts += Contribution(label, shield.armorPenalty, Source(SourceType.ITEM, shield.name))
             }
         }
         // Sobrecarga: penalidade de armadura –5 (p. 141).
@@ -220,10 +275,16 @@ object RuleEngine {
         )
     }
 
-    /** Ataques de todas as armas do inventário, em todos os modos possíveis. */
-    fun allAttacks(character: Character): List<AttackProfile> =
-        character.inventory.map { it.item }.filterIsInstance<WeaponDefinition>().distinct()
+    /** Em forma selvagem, só as armas naturais; fora dela, as armas do inventário em todos os modos. */
+    fun allAttacks(character: Character): List<AttackProfile> {
+        val form = character.activeWildShape
+        if (form != null) {
+            val sharpFangs = DruidPowers.PresasAfiadas in allPowers(character)
+            return WildShape.naturalWeapons(form, sharpFangs).map { attack(character, it, AttackMode.MELEE) }
+        }
+        return character.inventory.map { it.item }.filterIsInstance<WeaponDefinition>().distinct()
             .flatMap { weapon -> weapon.allowedModes.map { attack(character, weapon, it) } }
+    }
 
     // ---------- Magia (p. 170, 226, 227) ----------
 
@@ -238,11 +299,15 @@ object RuleEngine {
         return build(parts, modifiersFor(character, StatTarget.SpellDc))
     }
 
-    /** Magias de raça e de classe, sem repetir, com o custo final de cada uma. */
+    /** Magias ensinadas por raça e poderes (fora as de classe). */
+    fun grantedSpells(character: Character): List<GrantedSpell> =
+        character.race.grantedSpells + allPowers(character).flatMap { it.grantedSpells }
+
+    /** Magias de raça, poderes e classe, sem repetir, com o custo final de cada uma. */
     fun knownSpells(character: Character): List<KnownSpell> {
         val sources = linkedMapOf<SpellDefinition, MutableList<Source>>()
-        character.race.grantedSpells.forEach {
-            sources.getOrPut(it.spell) { mutableListOf() } += Source(SourceType.RACE, "${character.race.raceName}: ${it.ability.displayName}")
+        grantedSpells(character).forEach {
+            sources.getOrPut(it.spell) { mutableListOf() } += Source(it.sourceType, it.sourceName)
         }
         character.classSpells.forEach {
             sources.getOrPut(it) { mutableListOf() } += Source(SourceType.CLASS, character.characterClass.name)
@@ -251,19 +316,22 @@ object RuleEngine {
     }
 
     /**
-     * Custo pelo círculo (Tabela 4-1). Reduções não se acumulam: vale só a maior.
+     * Custo pelo círculo (Tabela 4-1). Fontes como Amiga das Plantas reduzem o custo
+     * quando a magia é aprendida de novo. Reduções não se acumulam: vale só a maior.
      * Nenhuma habilidade custa menos de 1 PM (p. 226).
      */
     fun spellCost(character: Character, spell: SpellDefinition): DerivedValue {
         val parts = mutableListOf(
             Contribution("${spell.circle}º círculo", SpellCost.of(spell.circle), Source(SourceType.BASE, "Tabela 4-1")),
         )
-        val bestReduction = character.race.grantedSpells
-            .filter { it.spell == spell && spell in character.classSpells && it.relearnDiscount > 0 }
-            .map { Contribution("${it.ability.displayName} (aprendida novamente)", -it.relearnDiscount, Source(SourceType.ABILITY, it.ability.displayName)) }
-            .minByOrNull { it.value }
-        bestReduction?.let { parts += it }
-
+        val grants = grantedSpells(character).filter { it.spell == spell }
+        val timesLearned = grants.size + (if (spell in character.classSpells) 1 else 0)
+        if (timesLearned >= 2) {
+            grants.filter { it.relearnDiscount > 0 }
+                .map { Contribution("${it.sourceName} (aprendida novamente)", -it.relearnDiscount, Source(it.sourceType, it.sourceName)) }
+                .minByOrNull { it.value }
+                ?.let { parts += it }
+        }
         val sum = parts.sumOf { it.value }
         if (sum < 1) {
             parts += Contribution("Mínimo de 1 PM", 1 - sum, Source(SourceType.BASE, "Reduções de custo"))
@@ -271,7 +339,7 @@ object RuleEngine {
         return DerivedValue(parts)
     }
 
-    // ---------- Habilidades e poderes ----------
+    // ---------- Habilidades, poderes e parceiros ----------
 
     /** Todas as habilidades recebidas, com repetição (importa para regras como Empatia Selvagem). */
     fun abilities(character: Character): List<Ability> =
@@ -280,15 +348,44 @@ object RuleEngine {
                 .filterKeys { it <= character.level }
                 .values.flatten()
 
-    fun allPowers(character: Character): Set<GeneralPower> = character.origin.powers + character.generalPowers
+    /** Todos os poderes, de todas as fontes (com repetições, para poderes repetíveis). */
+    fun allPowers(character: Character): List<Power> =
+        character.origin.powers.toList() +
+            character.generalPowers +
+            character.classPowers +
+            character.grantedPowers
+
+    fun prerequisiteContext(character: Character): PrerequisiteContext = PrerequisiteContext(
+        attributes = allAttributes(character.copy(activeWildShape = null)).mapValues { it.value.total },
+        trainedSkills = trainedSkills(character),
+        powers = allPowers(character),
+        classLevel = character.level,
+    )
+
+    fun companionTier(character: Character): PartnerTier = Partners.companionTier(character.level)
+
+    /** Efeitos que a ficha deve mostrar, mas que não viram números. */
+    fun notes(character: Character): List<String> = buildList {
+        allPowers(character).distinct().forEach { power -> power.notes.forEach { add("${power.name}: $it") } }
+        val tier = companionTier(character)
+        character.companions.forEach { addAll(Partners.notes(it.type, tier, companionLabel(it, tier))) }
+        character.activeWildShape?.let { addAll(WildShape.notes(it)) }
+    }
+
+    private fun companionLabel(companion: AnimalCompanion, tier: PartnerTier) =
+        "${companion.name} (${companion.type.displayName} ${tier.displayName})"
 
     // ---------- Infraestrutura ----------
 
-    private fun allModifiers(character: Character): List<Modifier> =
-        character.race.modifiers() +
+    private fun allModifiers(character: Character): List<Modifier> {
+        val tier = companionTier(character)
+        return character.race.modifiers() +
             allPowers(character).flatMap { it.modifiers(character.level) } +
             abilityRuleModifiers(character) +
+            character.companions.flatMap { Partners.modifiers(it.type, tier, it.chosenSkills, companionLabel(it, tier)) } +
+            (character.activeWildShape?.let { WildShape.modifiers(it) } ?: emptyList()) +
             character.manualModifiers
+    }
 
     /** Regras que dependem de combinações de habilidades. */
     private fun abilityRuleModifiers(character: Character): List<Modifier> {

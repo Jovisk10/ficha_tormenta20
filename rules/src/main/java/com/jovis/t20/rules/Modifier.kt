@@ -14,9 +14,13 @@ sealed interface StatTarget {
     data object WeaponDamage : StatTarget
     /** Limite de carga em espaços. */
     data object LoadLimit : StatTarget
+    /** Redução de dano. */
+    data object DamageReduction : StatTarget
+    /** Deslocamento em metros. */
+    data object Speed : StatTarget
 }
 
-enum class SourceType { BASE, RACE, ORIGIN, CLASS, ABILITY, POWER, ITEM, CONDITION, LEVEL, MANUAL }
+enum class SourceType { BASE, RACE, ORIGIN, CLASS, ABILITY, POWER, PARTNER, ITEM, CONDITION, LEVEL, MANUAL }
 
 /** De onde um modificador vem. É o que permite explicar "por que esse valor?". */
 data class Source(val type: SourceType, val name: String)

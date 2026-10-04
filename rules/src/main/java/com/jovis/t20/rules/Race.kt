@@ -25,7 +25,13 @@ data object Dahllan : RaceSelection {
 
     /** Amiga das Plantas: Controlar Plantas (Sab); se aprender de novo, custo –1 PM. */
     override val grantedSpells = listOf(
-        GrantedSpell(Spells.CONTROLAR_PLANTAS, Ability.AMIGA_DAS_PLANTAS, Attribute.SABEDORIA, relearnDiscount = 1),
+        GrantedSpell(
+            spell = Spells.CONTROLAR_PLANTAS,
+            sourceName = "$raceName: ${Ability.AMIGA_DAS_PLANTAS.displayName}",
+            sourceType = SourceType.RACE,
+            relearnDiscount = 1,
+            attribute = Attribute.SABEDORIA,
+        ),
     )
 
     override fun modifiers(): List<Modifier> {

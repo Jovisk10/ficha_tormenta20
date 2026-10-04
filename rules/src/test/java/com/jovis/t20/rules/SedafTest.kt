@@ -14,7 +14,8 @@ import kotlin.test.assertTrue
  *  - PV: a ficha mostrava 33, mas Vitalidade dá +1 PV por nível, então o correto é 36.
  *  - Carga: a ficha conta a Armadura de Couro como 1 espaço; pelo livro são 2 (total 6, não 5).
  *  - Perícias: a ficha tem 5 escolhas da lista de Druida, mas a classe permite 4.
- *    Enquanto não sabemos qual sai, o teste confirma que o Validator aponta o excesso.
+ * Pendências que dependem da jogadora: qual perícia sai, quais os 2 poderes concedidos
+ * de Allihanna e o tipo do companheiro animal. Por enquanto, o Validator aponta as três.
  */
 class SedafTest {
 
@@ -120,10 +121,17 @@ class SedafTest {
     }
 
     @Test
-    fun `validador aponta apenas a pericia de classe excedente`() {
-        val issues = Validator.validate(sedaf)
-        issues.forEach { println("Aviso: ${it.message}") }
-        assertEquals(1, issues.size)
-        assertTrue(issues.single().message.startsWith("Druida escolhe 4 perícias"))
+    fun `deslocamento padrao`() {
+        assertEquals(9, RuleEngine.speed(sedaf).total)
+    }
+
+    @Test
+    fun `validador aponta as tres pendencias da ficha`() {
+        val issues = Validator.validate(sedaf).map { it.message }
+        issues.forEach { println("Aviso: $it") }
+        assertEquals(3, issues.size)
+        assertTrue(issues.any { it.startsWith("Druida escolhe 4 perícias") })
+        assertTrue(issues.any { it.startsWith("Druida recebe 2 poderes concedidos de Allihanna; há 0") })
+        assertTrue(issues.any { it.startsWith("Há 1 poder(es) Companheiro Animal e 0 companheiro(s)") })
     }
 }

@@ -22,13 +22,23 @@ data class Character(
     val intelligenceSkills: Set<Skill> = emptySet(),
     /** Poderes gerais escolhidos fora da origem. */
     val generalPowers: Set<GeneralPower> = emptySet(),
-    /** Tudo o que o personagem carrega, inclusive a armadura vestida. */
+    /** Poderes de classe, na ordem em que foram escolhidos (lista porque alguns se repetem). */
+    val classPowers: List<ClassPower> = emptyList(),
+    /** Poderes concedidos pela divindade. */
+    val grantedPowers: Set<GrantedPower> = emptySet(),
+    /** Um companheiro para cada Companheiro Animal escolhido. */
+    val companions: List<AnimalCompanion> = emptyList(),
+    /** Tudo o que o personagem carrega, inclusive armadura e escudo. */
     val inventory: List<InventoryEntry> = emptyList(),
     /** Armadura vestida (deve estar também no inventário). */
     val armor: ArmorDefinition? = null,
+    /** Escudo empunhado (deve estar também no inventário). */
+    val shield: ShieldDefinition? = null,
     val spellSchools: Set<SpellSchool> = emptySet(),
-    /** Magias aprendidas pela classe (as de raça entram sozinhas). */
+    /** Magias aprendidas pela classe (as de raça e poderes entram sozinhas). */
     val classSpells: Set<SpellDefinition> = emptySet(),
+    /** Estado de sessão: forma selvagem ativa, se houver. */
+    val activeWildShape: ActiveWildShape? = null,
     val manualModifiers: List<Modifier> = emptyList(),
 ) {
     init {
