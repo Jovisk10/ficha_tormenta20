@@ -269,7 +269,7 @@ fun SkillGroupDialog(
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
                                 )
-                                if (!enabled && reason != null) RuleHint(reason)
+                                if (!enabled) RuleHint(reason)
                             }
                             Text(skill.keyAttribute.abbreviation, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
