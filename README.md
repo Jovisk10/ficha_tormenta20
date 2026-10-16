@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" alt="Logo do T20 Ficha: um d20 sobre uma pincelada vermelha" width="140">
+</p>
+
 # T20 Ficha
 
 Ficha de personagem para **Tormenta 20 — Edição Jogo do Ano**, feita para Android.
@@ -13,6 +17,12 @@ O app calcula sozinho os valores da ficha (perícias, Defesa, PV, PM, ataques, c
 - Seções recolhíveis: Combate, Perícias, Magias, Habilidades e poderes, Equipamento e Anotações, cada uma com um resumo (ex.: "Defesa 13", "6 de 14 espaços").
 - Toque em qualquer valor calculado para ver a explicação do cálculo. Bônus que só valem em certas situações (como a Armadura de Allihanna) aparecem separados, fora do total.
 
+**Rolagens**
+- Aba **Dados** na ficha, com dados em 3D (d4, d6, d8, d10, d12, d20 e d100) lançados numa bandeja de feltro: quicam com sombra no chão e param com o resultado de frente, com vibração. Rolagens com vários dados lançam todos juntos. No 20 natural, um brilho rápido.
+- Rolagens rápidas de perícias, atributos, ataques e dano, já com os bônus da ficha; o botão **Rolar** também aparece ao tocar numa perícia ou num ataque.
+- Regras do livro: 20 natural é sucesso automático e 1 natural é falha automática; no ataque, a margem de ameaça da arma indica crítico, e o dano crítico multiplica só os dados, não os bônus.
+- Dados livres (d4 a d100, com quantidade e modificador) e histórico das rolagens da sessão.
+
 **Edição**
 - Todos os campos da ficha, com bônus nomeados (ex.: "Vitalidade +2 em Fortitude"), bônus situacionais e bônus que crescem com o nível.
 - **Regras de criação aplicadas na edição:**
@@ -25,13 +35,14 @@ O app calcula sozinho os valores da ficha (perícias, Defesa, PV, PM, ataques, c
   - **Classes:** Arcanista (com os caminhos Bruxo, Feiticeiro e Mago), Bardo, Bucaneiro, Druida e Guerreiro. Preenche PV, PM, atributo de magia e perícias fixas.
   - **Raças:** Dahllan, Elfo, Humano, Lefou e Qareen. Adiciona habilidades, deslocamento e bônus.
   - **Origens:** Artista, Assistente de Laboratório, Marujo, Selvagem e Soldado.
-  - **Magias de 1º círculo** (53), já filtradas pelo que o personagem pode aprender: tipo (arcana ou divina), escolas escolhidas e círculo liberado pelo nível.
+  - **Magias de 1º e 2º círculos** (100), já filtradas pelo que o personagem pode aprender: tipo (arcana ou divina), escolas escolhidas e círculo liberado pelo nível.
   - **Armas** (40), **armaduras e escudos** (12) e **itens gerais** (mais de 100), com dano, crítico, alcance, preço e espaços.
 
 **Fichas**
 - Várias fichas salvas no celular, com lista na tela inicial.
 - Salvamento automático do estado de jogo (PV e PM gastos).
 - Modo claro e escuro.
+- Layout adaptável: em tablets e dobráveis abertos, a ficha se divide em duas colunas (o essencial à esquerda, as seções à direita) e se reorganiza na hora ao abrir ou fechar o aparelho.
 
 ## Arquitetura
 
@@ -60,9 +71,13 @@ O projeto tem dois módulos, separando as regras da interface:
 | rules | `ClassPowers.kt` | Poderes de classe e seus pré-requisitos |
 | rules | `CatalogPowers.kt` | Divindades, poderes concedidos e de origem, habilidades de classe |
 | rules | `CatalogApply.kt` | Aplica raça, classe, origem, devoção e poderes; regras de atributos e perícias |
+| rules | `DiceModels.kt` | Geometria dos dados (d4 a d20) numerados como dados físicos |
+| rules | `Dice.kt` | Fórmulas de dados, rolagens, crítico e rolagens prontas da ficha |
 | rules | `SheetCodec.kt`, `Json.kt` | Conversão da ficha para JSON e de volta |
 | rules | `RuleEngine.kt`, `Validator.kt` | Motor automático completo (usado nos testes de validação) |
 | app | `ui/sheet/SheetScreen.kt` | Tela da ficha |
+| app | `ui/dice/DiceTab.kt` | Aba de rolagens e histórico |
+| app | `ui/dice/DiceTray.kt` | Bandeja com os dados em 3D |
 | app | `ui/edit/` | Edição e escolha no catálogo |
 | app | `ui/list/SheetListScreen.kt` | Lista de fichas |
 | app | `data/SheetRepository.kt` | Salvamento das fichas |
@@ -90,10 +105,7 @@ Ou, no Android Studio, clique com o botão direito em `rules/src/test/java` e es
 
 ## Próximos passos
 
-- [ ] Rolagem de dados direto da ficha (perícias, ataques e dano)
-- [ ] Magias de 2º círculo
 - [ ] Exportar e importar fichas
-- [ ] Layout em duas colunas para dobráveis e tablets
 - [ ] Assistente de regras com IA, que consulta o livro (RAG) e sempre cita a página
 
 ## Aviso legal

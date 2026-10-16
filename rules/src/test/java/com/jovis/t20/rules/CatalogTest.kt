@@ -8,8 +8,9 @@ import kotlin.test.assertTrue
 class CatalogTest {
 
     @Test
-    fun `catalogo tem as magias de 1o circulo e nenhuma sem resumo`() {
-        assertEquals(53, SpellCatalog.ALL.size)
+    fun `catalogo tem as magias de 1o e 2o circulos e nenhuma sem resumo`() {
+        assertEquals(53, SpellCatalog.ALL.count { it.circle == 1 })
+        assertEquals(47, SpellCatalog.ALL.count { it.circle == 2 })
         assertTrue(SpellCatalog.ALL.all { it.summary.isNotBlank() && it.page in 170..215 })
         assertEquals(SpellCatalog.ALL.size, SpellCatalog.ALL.map { it.name }.toSet().size)
     }
@@ -123,5 +124,32 @@ class ArcanistaTest {
         val qareen = CatalogApply.applyRace(ManualSheet(name = "Q"), RaceCatalog.QAREEN)
         assertTrue(qareen.abilities.any { it.name == "Tatuagem Mística" })
         assertEquals("Assistente de Laboratório", OriginCatalog.byId("assistente")?.name)
+    }
+}
+
+class SegundoCirculoTest {
+
+    @Test
+    fun `segundo circulo so aparece quando o nivel libera`() {
+        val bardo3 = CatalogApply.applyClass(ManualSheet(name = "B", level = 3), ClassCatalog.BARDO)
+            .copy(spellSchools = setOf(SpellSchool.EVOCACAO, SpellSchool.ILUSAO, SpellSchool.ENCANTAMENTO))
+        assertTrue(CatalogApply.availableSpells(bardo3).none { it.circle == 2 })
+        val bardo6 = bardo3.copy(level = 6)
+        val magias = CatalogApply.availableSpells(bardo6)
+        assertTrue(magias.any { it.name == "Invisibilidade" })
+        assertTrue(magias.none { it.name == "Bola de Fogo" && it.school !in bardo6.spellSchools })
+    }
+
+    @Test
+    fun `arcanista libera o 2o circulo no 5o nivel`() {
+        val base = CatalogApply.applyClass(ManualSheet(name = "A", level = 4), ClassCatalog.ARCANISTA)
+        val mago4 = CatalogApply.applyPath(base, ClassCatalog.ARCANISTA.pathById("mago")!!)
+        assertTrue(CatalogApply.availableSpells(mago4).none { it.circle == 2 })
+        assertTrue(CatalogApply.availableSpells(mago4.copy(level = 5)).any { it.name == "Bola de Fogo" })
+    }
+
+    @Test
+    fun `custo do 2o circulo e 3 PM`() {
+        assertEquals(3, SpellCatalog.find("Bola de Fogo")!!.cost)
     }
 }

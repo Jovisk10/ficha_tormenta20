@@ -240,3 +240,48 @@ class PoderesDeClasseTest {
         assertEquals(bardo, SheetCodec.decode(SheetCodec.encode(bardo)))
     }
 }
+
+class PericiasRepetidasTest {
+
+    private fun lefouBardo(): ManualSheet {
+        var s = ManualSheet(name = "Peter", level = 3, attributeMode = AttributeMethod.POINT_BUY)
+        s = CatalogApply.applyRace(s, RaceCatalog.LEFOU)
+        s = CatalogApply.applyClass(s, ClassCatalog.BARDO)
+        return CatalogApply.applyOrigin(s, OriginCatalog.ARTISTA)
+    }
+
+    @Test
+    fun `pericia repetida em dois grupos fica so no de maior prioridade e libera a vaga`() {
+        var s = lefouBardo()
+        s = CatalogApply.setSkillGroup(s, SkillGroupId.CLASS, setOf(Skill.ACROBACIA, Skill.ENGANACAO))
+        s = CatalogApply.setSkillGroup(s, SkillGroupId.ORIGIN, setOf(Skill.ENGANACAO))
+        assertTrue(s.skillPicks!!.origin.isEmpty())
+        assertEquals(2, CatalogApply.skillGroups(s).first { it.id == SkillGroupId.ORIGIN }.remaining)
+    }
+
+    @Test
+    fun `pericia fixa da classe nao ocupa vaga em outro grupo`() {
+        var s = lefouBardo()
+        s = CatalogApply.setSkillGroup(s, SkillGroupId.OTHER, setOf(Skill.ATUACAO, Skill.NOBREZA))
+        assertEquals(setOf(Skill.NOBREZA), s.skillPicks!!.other)
+    }
+
+    @Test
+    fun `pericias de outras fontes podem ser movidas para a classe`() {
+        var s = CatalogApply.setSkillGroup(lefouBardo(), SkillGroupId.OTHER, setOf(Skill.DIPLOMACIA))
+        assertNull(CatalogApply.blockedReason(s, SkillGroupId.CLASS, Skill.DIPLOMACIA))
+        s = CatalogApply.setSkillGroup(s, SkillGroupId.CLASS, setOf(Skill.DIPLOMACIA))
+        assertEquals(setOf(Skill.DIPLOMACIA), s.skillPicks!!.classChoices)
+        assertTrue(s.skillPicks!!.other.isEmpty())
+    }
+
+    @Test
+    fun `deformidade pode repetir pericias treinadas e ser trocada`() {
+        var s = CatalogApply.setSkillGroup(lefouBardo(), SkillGroupId.RACE_BONUS, setOf(Skill.ATUACAO, Skill.REFLEXOS))
+        assertEquals(setOf(Skill.ATUACAO, Skill.REFLEXOS), s.skillPicks!!.raceBonus)
+        s = SheetCodec.decode(SheetCodec.encode(s))
+        s = CatalogApply.setSkillGroup(s, SkillGroupId.RACE_BONUS, setOf(Skill.DIPLOMACIA, Skill.INTIMIDACAO))
+        assertTrue(s.skillBonuses[Skill.ATUACAO].orEmpty().none { it.label == "Deformidade" })
+        assertTrue(s.skillBonuses[Skill.DIPLOMACIA]!!.any { it.label == "Deformidade" })
+    }
+}

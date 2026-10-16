@@ -16,6 +16,7 @@ import com.jovis.t20.ui.sheet.SheetScreen
 fun T20App(viewModel: SheetsViewModel) {
     val sheets by viewModel.sheets.collectAsState()
     val loaded by viewModel.loaded.collectAsState()
+    val rolls by viewModel.rolls.collectAsState()
 
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -70,6 +71,9 @@ fun T20App(viewModel: SheetsViewModel) {
                     viewModel.delete(open.id)
                     openId = null
                 },
+                rolls = rolls[open.id].orEmpty(),
+                roller = viewModel.roller,
+                onRoll = { viewModel.recordRoll(open.id, it) },
             )
         }
     }

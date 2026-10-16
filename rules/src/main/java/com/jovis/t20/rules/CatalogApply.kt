@@ -193,7 +193,7 @@ object CatalogApply {
             }
             if (race.bonusSkillChoices > 0) {
                 groups += SkillGroup(SkillGroupId.RACE_BONUS, "Deformidade (+2)",
-                    "+2 em ${race.bonusSkillChoices} perícias quaisquer (não dá treinamento).", race.bonusSkillChoices, all,
+                    "+2 em ${race.bonusSkillChoices} perícias quaisquer, treinadas ou não. É um bônus, não conta como treinamento (p. 24).", race.bonusSkillChoices, all,
                     picks.raceBonus, grantsTraining = false)
             }
         }
@@ -214,7 +214,10 @@ object CatalogApply {
         if (group.locked) return "Automática."
         if (skill !in group.allowed) return "Não está na lista deste grupo."
         if (group.grantsTraining) {
-            groups.firstOrNull { it.grantsTraining && it.id != groupId && skill in it.selected }?.let { return "Já treinada: ${it.title.lowercase()}." }
+            // "Outras fontes" é o grupo de menor prioridade: escolher a perícia em outro grupo a move de lá
+            groups.firstOrNull {
+                it.grantsTraining && it.id != groupId && it.id != SkillGroupId.OTHER && skill in it.selected
+            }?.let { return "Já treinada: ${it.title.lowercase()}." }
         }
         if (group.remaining != null && group.remaining!! <= 0) return "Limite deste grupo atingido."
         return null
@@ -242,14 +245,25 @@ object CatalogApply {
         val origin = OriginCatalog.byId(sheet.originId)
         val race = RaceCatalog.byId(sheet.raceId)
         val int = maxOf(0, sheet.attributes[Attribute.INTELIGENCIA] ?: 0)
+        // Cada perícia só pode ser treinada por um grupo. Em caso de repetição, fica no grupo de maior
+        // prioridade (classe, origem, raça, Inteligência, outras fontes) e sai dos demais, liberando a vaga.
+        val taken = cls.fixedSkills.toMutableSet()
+        fun keep(skills: Collection<Skill>, limit: Int = Int.MAX_VALUE): Set<Skill> =
+            skills.filter { it !in taken }.take(limit).toSet().also { taken += it }
+
+        val fixedChoice = p.classFixedChoice?.takeIf { it in cls.fixedChoice && it !in taken }?.also { taken += it }
         val picks = p.copy(
-            classFixedChoice = p.classFixedChoice?.takeIf { it in cls.fixedChoice },
-            classChoices = p.classChoices.filter { it in cls.skillChoiceList }.take(cls.skillChoiceCount).toSet(),
-            origin = if (origin == null) emptySet() else p.origin.filter { it in origin.skillOptions }
-                .take((origin.benefitCount - sheet.originPowers.size).coerceAtLeast(0)).toSet(),
-            race = p.race.take(race?.trainedSkillChoices ?: 0).toSet(),
+            classFixedChoice = fixedChoice,
+            classChoices = keep(p.classChoices.filter { it in cls.skillChoiceList }, cls.skillChoiceCount),
+            origin = if (origin == null) emptySet() else keep(
+                p.origin.filter { it in origin.skillOptions },
+                (origin.benefitCount - sheet.originPowers.size).coerceAtLeast(0),
+            ),
+            race = keep(p.race, race?.trainedSkillChoices ?: 0),
+            intelligence = keep(p.intelligence, int),
+            other = keep(p.other),
+            // Deformidade dá +2, não treinamento: pode repetir perícias treinadas
             raceBonus = p.raceBonus.take(race?.bonusSkillChoices ?: 0).toSet(),
-            intelligence = p.intelligence.take(int).toSet(),
         )
         val trained = cls.fixedSkills + setOfNotNull(picks.classFixedChoice) + picks.classChoices + picks.origin +
             picks.race + picks.intelligence + picks.other

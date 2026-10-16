@@ -117,7 +117,7 @@ fun SpellPickerDialog(
 
     CatalogPickerDialog<CatalogSpell>(
         title = "Magias do livro",
-        items = if (showAll) all else available,
+        items = (if (showAll) all else available).sortedWith(compareBy({ it.circle }, { it.name })),
         itemTitle = { it.name },
         itemSubtitle = { "${it.circle}º círculo, ${it.type.displayName.lowercase()}, ${it.school.displayName}" },
         onPick = { selected = it },
@@ -125,7 +125,7 @@ fun SpellPickerDialog(
         emptyMessage = "Nenhuma magia com esses filtros.",
         header = {
             Text(
-                if (showAll) "Mostrando todas as magias de 1º círculo." else explanation,
+                if (showAll) "Mostrando todas as magias do catálogo (1º e 2º círculos)." else explanation,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

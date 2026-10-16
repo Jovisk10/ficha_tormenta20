@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -48,23 +50,28 @@ fun SheetListScreen(
             ) { Text("Nova ficha") }
         },
     ) { innerPadding ->
-        LazyColumn(
+        // Grade adaptável: uma coluna no celular, cartões lado a lado em telas largas
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 320.dp),
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                Text(
-                    "Fichas",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontFamily = T20Fonts.display,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                TornEdge(MaterialTheme.colorScheme.primary, Modifier.padding(top = 2.dp), height = 7.dp)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Text(
+                        "Fichas",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontFamily = T20Fonts.display,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    TornEdge(MaterialTheme.colorScheme.primary, Modifier.padding(top = 6.dp), height = 7.dp)
+                }
             }
             if (loaded && sheets.isEmpty()) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         "Nenhuma ficha ainda. Toque em Nova ficha para criar a primeira.",
                         style = MaterialTheme.typography.bodyLarge,

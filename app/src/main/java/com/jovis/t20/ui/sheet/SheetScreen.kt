@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,6 +40,16 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import com.jovis.t20.rules.DiceRoller
+import com.jovis.t20.rules.RollRecord
+import com.jovis.t20.rules.SheetRolls
+import com.jovis.t20.rules.SheetWeapon
+import com.jovis.t20.ui.dice.DiceTab
+import com.jovis.t20.ui.dice.DiceTabIcon
+import com.jovis.t20.ui.dice.SheetTabIcon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,7 +78,8 @@ import com.jovis.t20.rules.SheetEngine
 import com.jovis.t20.rules.Skill
 
 /** Um valor que o jogador tocou para ver a explicação. */
-private data class Explanation(val title: String, val value: DerivedValue)
+/** Um valor que o jogador tocou para ver a explicação; [onRoll] aparece como botão Rolar. */
+private data class Explanation(val title: String, val value: DerivedValue, val onRoll: (() -> Unit)? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,8 +89,15 @@ fun SheetScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    rolls: List<RollRecord>,
+    roller: DiceRoller,
+    onRoll: (RollRecord) -> Unit,
 ) {
     var explanation by remember { mutableStateOf<Explanation?>(null) }
+    // 0 = Ficha, 1 = Dados
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    // Última rolagem já animada, guardada aqui para a animação não repetir ao trocar de aba
+    var animatedRollId by rememberSaveable { mutableStateOf(0L) }
     var confirmDelete by remember { mutableStateOf(false) }
     // Guardado como texto para sobreviver à rotação da tela
     var expandedNames by rememberSaveable { mutableStateOf("") }
@@ -88,108 +107,182 @@ fun SheetScreen(
         expandedNames = updated.joinToString(",") { it.name }
     }
     val explain: (String, DerivedValue) -> Unit = { title, value -> explanation = Explanation(title, value) }
+    // Rola, registra e leva para a aba Dados, onde o dado anima
+    fun showRoll(roll: RollRecord?) {
+        if (roll == null) return
+        onRoll(roll)
+        explanation = null
+        selectedTab = 1
+    }
+    val explainSkill: (Skill, DerivedValue) -> Unit = { skill, value ->
+        explanation = Explanation(skill.displayName, value) { showRoll(SheetRolls.skill(roller, sheet, skill)) }
+    }
+    val explainAttack: (SheetWeapon, DerivedValue) -> Unit = { weapon, value ->
+        explanation = Explanation("Ataque: ${weapon.name}", value) { showRoll(SheetRolls.attack(roller, sheet, weapon)) }
+    }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onBack) { Text("‹ Fichas") }
-                    Spacer(Modifier.weight(1f))
-                    Button(onClick = onEdit) { Text("Editar") }
+    // Pedaços da ficha, usados tanto no layout de uma coluna quanto no de duas
+    val topActions: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Fichas") }
+            Spacer(Modifier.weight(1f))
+            Button(onClick = onEdit) { Text("Editar") }
+        }
+    }
+    val core: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Header(sheet)
+            Text(
+                "Toque em um valor calculado para ver de onde ele vem.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            AttributeStrip(sheet)
+            Resources(
+                sheet = sheet,
+                onHpChange = { delta ->
+                    val max = SheetEngine.maxHp(sheet).total
+                    onSheetChange(sheet.copy(currentHp = (SheetEngine.currentHp(sheet) + delta).coerceAtMost(max)))
+                },
+                onMpChange = { delta ->
+                    val max = SheetEngine.maxMp(sheet).total
+                    onSheetChange(sheet.copy(currentMp = (SheetEngine.currentMp(sheet) + delta).coerceIn(0, max)))
+                },
+                explain = explain,
+            )
+        }
+    }
+    // Seções recolhíveis: abrem e fecham com um toque no título
+    val sectionsBlock: @Composable () -> Unit = {
+        run {
+            Column {
+                val spellDc = SheetEngine.spellDc(sheet)
+                val sections = buildList {
+                    add(
+                        SectionSpec(SheetSection.COMBATE, "Defesa ${SheetEngine.defense(sheet).total}") {
+                            Combat(sheet, explain, explainAttack)
+                        },
+                    )
+                    add(
+                        SectionSpec(SheetSection.PERICIAS, "${sheet.trainedSkills.size} treinadas") {
+                            SkillList(sheet, explainSkill)
+                        },
+                    )
+                    add(
+                        SectionSpec(
+                            SheetSection.MAGIAS,
+                            when {
+                                sheet.spells.isEmpty() && spellDc == null -> "Nenhuma"
+                                spellDc == null -> countLabel(sheet.spells.size, "magia", "magias")
+                                else -> "${countLabel(sheet.spells.size, "magia", "magias")}, CD ${spellDc.total}"
+                            },
+                        ) { Spells(sheet, explain) },
+                    )
+                    add(
+                        SectionSpec(SheetSection.HABILIDADES, if (sheet.abilities.isEmpty()) "Nenhuma" else "${sheet.abilities.size}") {
+                            Abilities(sheet)
+                        },
+                    )
+                    add(
+                        SectionSpec(
+                            SheetSection.EQUIPAMENTO,
+                            "${formatSlots(SheetEngine.currentLoad(sheet))} de ${SheetEngine.loadLimit(sheet).total} espaços",
+                        ) { Equipment(sheet) },
+                    )
+                    if (sheet.notes.isNotBlank()) {
+                        add(SectionSpec(SheetSection.ANOTACOES, "") {
+                            Text(sheet.notes, style = MaterialTheme.typography.bodyMedium)
+                        })
+                    }
                 }
-            }
-            item { Header(sheet) }
-            item {
-                Text(
-                    "Toque em um valor calculado para ver de onde ele vem.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            item { AttributeStrip(sheet) }
-            item {
-                Resources(
-                    sheet = sheet,
-                    onHpChange = { delta ->
-                        val max = SheetEngine.maxHp(sheet).total
-                        onSheetChange(sheet.copy(currentHp = (SheetEngine.currentHp(sheet) + delta).coerceAtMost(max)))
-                    },
-                    onMpChange = { delta ->
-                        val max = SheetEngine.maxMp(sheet).total
-                        onSheetChange(sheet.copy(currentMp = (SheetEngine.currentMp(sheet) + delta).coerceIn(0, max)))
-                    },
-                    explain = explain,
-                )
-            }
-            // Seções recolhíveis: abrem e fecham com um toque no título
-            item {
-                run {
-                    Column {
-                        val spellDc = SheetEngine.spellDc(sheet)
-                        val sections = buildList {
-                            add(
-                                SectionSpec(SheetSection.COMBATE, "Defesa ${SheetEngine.defense(sheet).total}") {
-                                    Combat(sheet, explain)
-                                },
-                            )
-                            add(
-                                SectionSpec(SheetSection.PERICIAS, "${sheet.trainedSkills.size} treinadas") {
-                                    SkillList(sheet, explain)
-                                },
-                            )
-                            add(
-                                SectionSpec(
-                                    SheetSection.MAGIAS,
-                                    when {
-                                        sheet.spells.isEmpty() && spellDc == null -> "Nenhuma"
-                                        spellDc == null -> countLabel(sheet.spells.size, "magia", "magias")
-                                        else -> "${countLabel(sheet.spells.size, "magia", "magias")}, CD ${spellDc.total}"
-                                    },
-                                ) { Spells(sheet, explain) },
-                            )
-                            add(
-                                SectionSpec(SheetSection.HABILIDADES, if (sheet.abilities.isEmpty()) "Nenhuma" else "${sheet.abilities.size}") {
-                                    Abilities(sheet)
-                                },
-                            )
-                            add(
-                                SectionSpec(
-                                    SheetSection.EQUIPAMENTO,
-                                    "${formatSlots(SheetEngine.currentLoad(sheet))} de ${SheetEngine.loadLimit(sheet).total} espaços",
-                                ) { Equipment(sheet) },
-                            )
-                            if (sheet.notes.isNotBlank()) {
-                                add(SectionSpec(SheetSection.ANOTACOES, "") {
-                                    Text(sheet.notes, style = MaterialTheme.typography.bodyMedium)
-                                })
-                            }
-                        }
-                        sections.forEachIndexed { index, spec ->
-                            // Faixas alternadas, como as tabelas do livro
-                            val stripe = if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent
-                            Box(Modifier.background(stripe)) {
-                            CollapsibleSection(
-                                title = spec.section.title,
-                                summary = spec.summary,
-                                expanded = spec.section in expanded,
-                                onToggle = { toggle(spec.section) },
-                                content = spec.content,
-                            )
-                            }
-                        }
+                sections.forEachIndexed { index, spec ->
+                    // Faixas alternadas, como as tabelas do livro
+                    val stripe = if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent
+                    Box(Modifier.background(stripe)) {
+                    CollapsibleSection(
+                        title = spec.section.title,
+                        summary = spec.summary,
+                        expanded = spec.section in expanded,
+                        onToggle = { toggle(spec.section) },
+                        content = spec.content,
+                    )
                     }
                 }
             }
-            item {
-                TextButton(onClick = { confirmDelete = true }) {
-                    Text("Excluir ficha", color = MaterialTheme.colorScheme.tertiary)
+        }
+    }
+    val deleteButton: @Composable () -> Unit = {
+        TextButton(onClick = { confirmDelete = true }) {
+            Text("Excluir ficha", color = MaterialTheme.colorScheme.tertiary)
+        }
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { SheetTabIcon(LocalContentColor.current) },
+                    label = { Text("Ficha") },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = { DiceTabIcon(LocalContentColor.current) },
+                    label = { Text("Dados") },
+                )
+            }
+        },
+    ) { innerPadding ->
+        if (selectedTab == 1) {
+            Box(Modifier.fillMaxSize().padding(innerPadding)) {
+                DiceTab(
+                    sheet = sheet,
+                    rolls = rolls,
+                    roller = roller,
+                    onRoll = onRoll,
+                    animatedRollId = animatedRollId,
+                    onAnimated = { animatedRollId = it },
+                )
+            }
+            return@Scaffold
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().padding(innerPadding)) {
+            if (maxWidth >= TWO_PANE_MIN_WIDTH) {
+                // Tela larga (tablet, dobrável aberto): o essencial à esquerda, as seções à direita,
+                // cada coluna com sua própria rolagem
+                Row(Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier.weight(0.44f).fillMaxHeight(),
+                        contentPadding = PaddingValues(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        item { topActions() }
+                        item { core() }
+                        item { deleteButton() }
+                    }
+                    LazyColumn(
+                        modifier = Modifier.weight(0.56f).fillMaxHeight(),
+                        contentPadding = PaddingValues(start = 12.dp, end = 24.dp, top = 64.dp, bottom = 24.dp),
+                    ) {
+                        item { sectionsBlock() }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    item { topActions() }
+                    item { core() }
+                    item { sectionsBlock() }
+                    item { deleteButton() }
+                    item { Spacer(Modifier.height(24.dp)) }
                 }
             }
-            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
@@ -210,6 +303,12 @@ fun SheetScreen(
     explanation?.let { current ->
         ModalBottomSheet(onDismissRequest = { explanation = null }) {
             ExplanationContent(current)
+            current.onRoll?.let { roll ->
+                Button(
+                    onClick = roll,
+                    modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+                ) { Text("Rolar") }
+            }
         }
     }
 }
@@ -389,7 +488,7 @@ private class SectionSpec(
 )
 
 @Composable
-private fun CollapsibleSection(
+internal fun CollapsibleSection(
     title: String,
     summary: String,
     expanded: Boolean,
@@ -466,7 +565,11 @@ private fun countLabel(count: Int, singular: String, plural: String) = if (count
 // ---------- Combate ----------
 
 @Composable
-private fun Combat(sheet: ManualSheet, explain: (String, DerivedValue) -> Unit) {
+private fun Combat(
+    sheet: ManualSheet,
+    explain: (String, DerivedValue) -> Unit,
+    explainAttack: (SheetWeapon, DerivedValue) -> Unit,
+) {
     val defense = SheetEngine.defense(sheet)
     val speed = SheetEngine.speed(sheet)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -476,7 +579,7 @@ private fun Combat(sheet: ManualSheet, explain: (String, DerivedValue) -> Unit) 
         }
         sheet.weapons.forEach { weapon ->
             val attack = SheetEngine.attackBonus(sheet, weapon)
-            ListRow(onClick = { explain("Ataque: ${weapon.name}", attack) }) {
+            ListRow(onClick = { explainAttack(weapon, attack) }) {
                 Column(Modifier.weight(1f)) {
                     Text(weapon.name, style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -508,7 +611,7 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier,
 // ---------- Perícias ----------
 
 @Composable
-private fun SkillList(sheet: ManualSheet, explain: (String, DerivedValue) -> Unit) {
+private fun SkillList(sheet: ManualSheet, explainSkill: (Skill, DerivedValue) -> Unit) {
     run {
         Column {
             Skill.entries.forEachIndexed { index, skill ->
@@ -517,7 +620,7 @@ private fun SkillList(sheet: ManualSheet, explain: (String, DerivedValue) -> Uni
                 val usable = SheetEngine.canUse(sheet, skill)
                 val stripe = if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f) else Color.Transparent
                 Box(Modifier.background(stripe)) {
-                ListRow(onClick = { explain(skill.displayName, value) }, horizontalPadding = 8.dp) {
+                ListRow(onClick = { explainSkill(skill, value) }, horizontalPadding = 8.dp) {
                     // Marca de treinamento: círculo cheio = treinada
                     Box(
                         Modifier.size(10.dp).clip(CircleShape).background(
@@ -699,6 +802,9 @@ private fun ValueText(value: Int, muted: Boolean = false) {
         modifier = Modifier.width(44.dp),
     )
 }
+
+/** Largura a partir da qual a ficha usa duas colunas (classe de janela "média" do Material). */
+internal val TWO_PANE_MIN_WIDTH = 600.dp
 
 private fun signed(value: Int): String = if (value >= 0) "+$value" else "$value"
 

@@ -245,12 +245,18 @@ fun SkillGroupDialog(
             Column {
                 RuleHint(group.description)
                 group.limit?.let { Text("${group.selected.size} de $it", style = MaterialTheme.typography.titleMedium) }
+                val limit = group.limit
+                if (limit != null && limit > 1 && group.remaining == 0) {
+                    RuleHint("Vagas ocupadas: desmarque uma perícia para poder escolher outra.", warning = true)
+                }
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     // As permitidas primeiro, depois as bloqueadas
                     val sorted = Skill.entries.sortedBy { if (it in group.selected || blockedReason(it) == null) 0 else 1 }
                     sorted.forEach { skill ->
                         val selected = skill in group.selected
-                        val reason = blockedReason(skill)
+                        // Em grupos de uma escolha só (ex.: Luta ou Pontaria), tocar em outra opção troca a escolha
+                        val swap = group.limit == 1 && skill in group.allowed && !selected && group.selected.isNotEmpty()
+                        val reason = if (swap) null else blockedReason(skill)
                         val enabled = selected || reason == null
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp)

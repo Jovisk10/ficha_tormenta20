@@ -2,6 +2,11 @@ package com.jovis.t20.ui.edit
 
 import com.jovis.t20.ui.theme.T20Fonts
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -112,8 +119,9 @@ fun EditSheetScreen(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+            // Em telas largas, o formulário fica centralizado com largura confortável
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = 720.dp),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -292,7 +300,10 @@ fun EditSheetScreen(
                     EditSection("Perícias") {
                         val groups = CatalogApply.skillGroups(draft)
                         if (groups.isNotEmpty()) {
-                            Hint("O treinamento segue as regras da classe, origem, raça e Inteligência. Toque em uma perícia da lista abaixo para adicionar bônus.")
+                            Hint(
+                                "Para treinar uma perícia, use os grupos abaixo (classe, origem, raça, Inteligência ou outras fontes). " +
+                                    "A lista mais embaixo mostra o resultado; toque em uma perícia nela para adicionar bônus."
+                            )
                             groups.forEach { group -> SkillGroupRow(group) { skillGroupDialog = group.id } }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         } else {
@@ -306,18 +317,37 @@ fun EditSheetScreen(
                                 Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { skillDialog = skill },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Checkbox(
-                                    checked = trained,
-                                    enabled = !structured,
-                                    onCheckedChange = { on ->
-                                        draft = draft.copy(trainedSkills = if (on) draft.trainedSkills + skill else draft.trainedSkills - skill)
-                                    },
-                                )
+                                if (structured) {
+                                    // Com as regras do catálogo, o treinamento vem dos grupos acima:
+                                    // aqui só mostramos de onde ele veio, sem caixinha para marcar
+                                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                        Box(
+                                            Modifier.size(12.dp).clip(CircleShape).background(
+                                                if (trained) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                            ),
+                                        )
+                                    }
+                                } else {
+                                    Checkbox(
+                                        checked = trained,
+                                        onCheckedChange = { on ->
+                                            draft = draft.copy(trainedSkills = if (on) draft.trainedSkills + skill else draft.trainedSkills - skill)
+                                        },
+                                    )
+                                }
                                 Column(Modifier.weight(1f)) {
                                     Text(skill.displayName, style = MaterialTheme.typography.bodyLarge)
-                                    if (bonusCount > 0) {
+                                    val details = buildList {
+                                        if (structured) {
+                                            groups.firstOrNull { it.grantsTraining && skill in it.selected }
+                                                ?.let { add("Treinada: ${it.title.lowercase()}") }
+                                        }
+                                        if (bonusCount > 0) add(if (bonusCount == 1) "1 bônus" else "$bonusCount bônus")
+                                    }
+                                    if (details.isNotEmpty()) {
                                         Text(
-                                            if (bonusCount == 1) "1 bônus" else "$bonusCount bônus",
+                                            details.joinToString(" · "),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -515,7 +545,11 @@ fun EditSheetScreen(
                 group = group,
                 blockedReason = { skill -> CatalogApply.blockedReason(draft, groupId, skill) },
                 onToggle = { skill, on ->
-                    val selected = if (on) group.selected + skill else group.selected - skill
+                    val selected = when {
+                        on && group.limit == 1 -> setOf(skill)
+                        on -> group.selected + skill
+                        else -> group.selected - skill
+                    }
                     draft = CatalogApply.setSkillGroup(draft, groupId, selected)
                 },
                 onDismiss = { skillGroupDialog = null },

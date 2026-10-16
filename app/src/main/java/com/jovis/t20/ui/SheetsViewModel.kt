@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.jovis.t20.data.SheetRepository
 import com.jovis.t20.data.StoredSheet
 import com.jovis.t20.rules.AttributeMethod
+import com.jovis.t20.rules.DiceRoller
 import com.jovis.t20.rules.ManualSheet
+import com.jovis.t20.rules.RollRecord
 import com.jovis.t20.rules.SampleSheets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +33,16 @@ class SheetsViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
+    /** Dados da sessão: um único rolador e o histórico de cada ficha (não é salvo em arquivo). */
+    val roller = DiceRoller()
+    private val _rolls = MutableStateFlow<Map<String, List<RollRecord>>>(emptyMap())
+    val rolls: StateFlow<Map<String, List<RollRecord>>> = _rolls.asStateFlow()
+
+    fun recordRoll(sheetId: String, roll: RollRecord) {
+        val history = (listOf(roll) + _rolls.value[sheetId].orEmpty()).take(50)
+        _rolls.value = _rolls.value + (sheetId to history)
+    }
 
     init {
         viewModelScope.launch {
