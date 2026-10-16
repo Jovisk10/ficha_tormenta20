@@ -93,10 +93,13 @@ object RuleEngine {
 
     // ---------- Proficiências (p. 32, 142, 152) ----------
 
-    fun isProficient(character: Character, weapon: WeaponDefinition): Boolean =
-        weapon.proficiency == WeaponProficiency.SIMPLE ||
-            weapon.proficiency == WeaponProficiency.NATURAL ||
-            weapon.proficiency in character.characterClass.weaponProficiencies
+    /** [twoHanded]: com as duas mãos, algumas exóticas contam como marciais (p. 147-149). */
+    fun isProficient(character: Character, weapon: WeaponDefinition, twoHanded: Boolean = false): Boolean {
+        val needed = if (twoHanded && weapon.martialWhenTwoHanded) WeaponProficiency.MARTIAL else weapon.proficiency
+        return needed == WeaponProficiency.SIMPLE ||
+            needed == WeaponProficiency.NATURAL ||
+            needed in character.characterClass.weaponProficiencies
+    }
 
     fun isProficient(character: Character, armor: ArmorDefinition): Boolean =
         armor.category == ArmorCategory.LIGHT ||
@@ -249,14 +252,19 @@ object RuleEngine {
      * Teste de ataque: Luta (corpo a corpo) ou Pontaria (distância), –5 sem proficiência.
      * Dano: dado da arma + Força em corpo a corpo e arremesso; disparo não soma atributo.
      */
-    fun attack(character: Character, weapon: WeaponDefinition, mode: AttackMode = weapon.allowedModes.first()): AttackProfile {
+    fun attack(
+        character: Character,
+        weapon: WeaponDefinition,
+        mode: AttackMode = weapon.allowedModes.first(),
+        twoHanded: Boolean = false,
+    ): AttackProfile {
         require(mode in weapon.allowedModes) { "${weapon.name} não pode ser usada no modo $mode." }
 
         val attackSkill = if (mode == AttackMode.MELEE) Skill.LUTA else Skill.PONTARIA
         val attackParts = mutableListOf(
             Contribution(attackSkill.displayName, skill(character, attackSkill).total, Source(SourceType.BASE, attackSkill.displayName)),
         )
-        if (!isProficient(character, weapon)) {
+        if (!isProficient(character, weapon, twoHanded)) {
             attackParts += Contribution("Sem proficiência", -5, Source(SourceType.ITEM, weapon.name))
         }
 
@@ -269,7 +277,8 @@ object RuleEngine {
             weapon = weapon,
             mode = mode,
             attack = build(attackParts, modifiersFor(character, StatTarget.Attack)),
-            damageDice = weapon.damageDice,
+            // Adaptável (p. 143): "1d10/1d12" usa o segundo dano com as duas mãos
+            damageDice = WeaponDamage.forGrip(weapon.damageDice, twoHanded),
             damageBonus = build(damageParts, modifiersFor(character, StatTarget.WeaponDamage)),
             critical = weapon.criticalText,
         )

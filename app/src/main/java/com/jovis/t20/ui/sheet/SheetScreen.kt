@@ -56,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -117,8 +118,11 @@ fun SheetScreen(
     val explainSkill: (Skill, DerivedValue) -> Unit = { skill, value ->
         explanation = Explanation(skill.displayName, value) { showRoll(SheetRolls.skill(roller, sheet, skill)) }
     }
-    val explainAttack: (SheetWeapon, DerivedValue) -> Unit = { weapon, value ->
-        explanation = Explanation("Ataque: ${weapon.name}", value) { showRoll(SheetRolls.attack(roller, sheet, weapon)) }
+    val explainAttack: (Int, SheetWeapon, DerivedValue, Boolean) -> Unit = { index, weapon, value, twoHanded ->
+        val grip = if (twoHanded) " (duas mãos)" else ""
+        explanation = Explanation("Ataque: ${weapon.name}$grip", value) {
+            showRoll(SheetRolls.attack(roller, sheet, weapon, twoHanded, weaponIndex = index))
+        }
     }
 
     // Pedaços da ficha, usados tanto no layout de uma coluna quanto no de duas
@@ -568,7 +572,7 @@ private fun countLabel(count: Int, singular: String, plural: String) = if (count
 private fun Combat(
     sheet: ManualSheet,
     explain: (String, DerivedValue) -> Unit,
-    explainAttack: (SheetWeapon, DerivedValue) -> Unit,
+    explainAttack: (Int, SheetWeapon, DerivedValue, Boolean) -> Unit,
 ) {
     val defense = SheetEngine.defense(sheet)
     val speed = SheetEngine.speed(sheet)
@@ -577,20 +581,27 @@ private fun Combat(
             StatBox("Defesa", "${defense.total}", Modifier.weight(1f)) { explain("Defesa", defense) }
             StatBox("Deslocamento", "${speed.total}m", Modifier.weight(1f)) { explain("Deslocamento", speed) }
         }
-        sheet.weapons.forEach { weapon ->
+        // Chave pelo índice: armas de mesmo nome não colidem
+        sheet.weapons.forEachIndexed { index, weapon -> key(index) {
             val attack = SheetEngine.attackBonus(sheet, weapon)
-            ListRow(onClick = { explainAttack(weapon, attack) }) {
+            // Empunhadura só da tela, por arma; padrão "Uma mão"
+            var twoHanded by rememberSaveable { mutableStateOf(false) }
+            val useTwoHands = twoHanded && weapon.canUseTwoHanded
+            ListRow(onClick = { explainAttack(index, weapon, attack, useTwoHands) }) {
                 Column(Modifier.weight(1f)) {
                     Text(weapon.name, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Dano ${SheetEngine.damageText(sheet, weapon)}, crítico ${SheetEngine.criticalText(weapon)}",
+                        "Dano ${SheetEngine.damageText(sheet, weapon, useTwoHands)}, crítico ${SheetEngine.criticalText(weapon)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 ValueText(attack.total)
             }
-        }
+            if (weapon.canUseTwoHanded) {
+                GripSelector(twoHanded, onChange = { twoHanded = it })
+            }
+        } }
     }
 }
 

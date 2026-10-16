@@ -10,7 +10,7 @@ class CatalogTest {
     @Test
     fun `catalogo tem as magias de 1o e 2o circulos e nenhuma sem resumo`() {
         assertEquals(53, SpellCatalog.ALL.count { it.circle == 1 })
-        assertEquals(47, SpellCatalog.ALL.count { it.circle == 2 })
+        assertEquals(48, SpellCatalog.ALL.count { it.circle == 2 }) // listas das pp. 174/176
         assertTrue(SpellCatalog.ALL.all { it.summary.isNotBlank() && it.page in 170..215 })
         assertEquals(SpellCatalog.ALL.size, SpellCatalog.ALL.map { it.name }.toSet().size)
     }
@@ -130,7 +130,7 @@ class ArcanistaTest {
 class SegundoCirculoTest {
 
     @Test
-    fun `segundo circulo so aparece quando o nivel libera`() {
+    fun `segundo circulo so aparece quando o nivel libera`() { // Tabela 1-7, p. 44
         val bardo3 = CatalogApply.applyClass(ManualSheet(name = "B", level = 3), ClassCatalog.BARDO)
             .copy(spellSchools = setOf(SpellSchool.EVOCACAO, SpellSchool.ILUSAO, SpellSchool.ENCANTAMENTO))
         assertTrue(CatalogApply.availableSpells(bardo3).none { it.circle == 2 })
@@ -141,7 +141,7 @@ class SegundoCirculoTest {
     }
 
     @Test
-    fun `arcanista libera o 2o circulo no 5o nivel`() {
+    fun `arcanista libera o 2o circulo no 5o nivel`() { // Tabela 1-5, p. 37
         val base = CatalogApply.applyClass(ManualSheet(name = "A", level = 4), ClassCatalog.ARCANISTA)
         val mago4 = CatalogApply.applyPath(base, ClassCatalog.ARCANISTA.pathById("mago")!!)
         assertTrue(CatalogApply.availableSpells(mago4).none { it.circle == 2 })
@@ -149,7 +149,7 @@ class SegundoCirculoTest {
     }
 
     @Test
-    fun `custo do 2o circulo e 3 PM`() {
+    fun `custo do 2o circulo e 3 PM`() { // Tabela 4-1, p. 170
         assertEquals(3, SpellCatalog.find("Bola de Fogo")!!.cost)
     }
 }

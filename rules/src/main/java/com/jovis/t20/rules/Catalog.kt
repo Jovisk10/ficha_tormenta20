@@ -195,6 +195,8 @@ object SpellCatalog {
             "Um projétil ácido causa dano e pode continuar corroendo o alvo por mais dois turnos."),
         CatalogSpell("Físico Divino", SpellType.DIVINE, 2, SpellSchool.TRANSMUTACAO, "padrão", "toque", "Alvo", "1 criatura", "cena", null, 193,
             "O alvo recebe +2 em Força, Destreza ou Constituição."),
+        CatalogSpell("Globo da Verdade de Gwen", SpellType.DIVINE, 2, SpellSchool.ADIVINHACAO, "padrão", "curto", "Efeito", "1 globo", "cena", null, 194,
+            "Um globo flutuante mostra a todos uma cena da última semana vista por você ou por uma criatura tocada."),
         CatalogSpell("Invisibilidade", SpellType.ARCANE, 2, SpellSchool.ILUSAO, "livre", "pessoal", "Alvo", "você", "1 rodada", null, 195,
             "Você fica invisível até fazer uma ação hostil."),
         CatalogSpell("Ligação Telepática", SpellType.ARCANE, 2, SpellSchool.ADIVINHACAO, "padrão", "toque", "Alvo", "2 criaturas voluntárias", "1 dia", null, 197,
@@ -281,7 +283,13 @@ data class CatalogWeapon(
     /** O primeiro modo é o principal; armas como a lança também podem ser arremessadas. */
     val modes: List<AttackMode>,
     val note: String = "",
+    /** Exótica com uma mão, mas marcial se usada com as duas (espada bastarda, katana, machado anão; p. 147-149). */
+    val martialWhenTwoHanded: Boolean = false,
 ) {
+    /** Proficiência exigida conforme a empunhadura (p. 142, 147-149). */
+    fun proficiencyFor(twoHanded: Boolean): WeaponProficiency =
+        if (twoHanded && martialWhenTwoHanded) WeaponProficiency.MARTIAL else proficiency
+
     val criticalText: String
         get() = if (criticalMultiplier == 2) "$criticalRange" else if (criticalRange == 20) "x$criticalMultiplier" else "$criticalRange/x$criticalMultiplier"
 
@@ -354,9 +362,11 @@ object WeaponCatalog {
         CatalogWeapon("Besta pesada", M, WeaponGrip.DUAS_MAOS, "1d12", 19, 2, "Médio", P, 2.0, "T$ 50", FIRING, "usa virotes"),
         // Exóticas
         CatalogWeapon("Chicote", E, WeaponGrip.UMA_MAO, "1d3", 20, 2, null, C, 1.0, "T$ 2", MELEE),
-        CatalogWeapon("Espada bastarda", E, WeaponGrip.UMA_MAO, "1d10/1d12", 19, 2, null, C, 1.0, "T$ 35", MELEE, "segundo dano com as duas mãos"),
-        CatalogWeapon("Katana", E, WeaponGrip.UMA_MAO, "1d8/1d10", 19, 2, null, C, 1.0, "T$ 100", MELEE, "segundo dano com as duas mãos"),
-        CatalogWeapon("Machado anão", E, WeaponGrip.UMA_MAO, "1d10", 20, 3, null, C, 1.0, "T$ 30", MELEE),
+        // Adaptáveis (p. 143): com as duas mãos, segundo dano e proficiência marcial (p. 147-148)
+        CatalogWeapon("Espada bastarda", E, WeaponGrip.UMA_MAO, "1d10/1d12", 19, 2, null, C, 1.0, "T$ 35", MELEE, "segundo dano com as duas mãos", martialWhenTwoHanded = true),
+        CatalogWeapon("Katana", E, WeaponGrip.UMA_MAO, "1d8/1d10", 19, 2, null, C, 1.0, "T$ 100", MELEE, "segundo dano com as duas mãos", martialWhenTwoHanded = true),
+        // p. 149: marcial com as duas mãos, mas o dano não muda (não é adaptável)
+        CatalogWeapon("Machado anão", E, WeaponGrip.UMA_MAO, "1d10", 20, 3, null, C, 1.0, "T$ 30", MELEE, martialWhenTwoHanded = true),
         CatalogWeapon("Corrente de espinhos", E, WeaponGrip.DUAS_MAOS, "2d4/2d4", 19, 2, null, C, 2.0, "T$ 25", MELEE, "arma dupla"),
         CatalogWeapon("Machado táurico", E, WeaponGrip.DUAS_MAOS, "2d8", 20, 3, null, C, 2.0, "T$ 50", MELEE),
         // Armas de fogo

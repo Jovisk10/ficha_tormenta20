@@ -40,7 +40,13 @@ data class SheetWeapon(
     val attackBonuses: List<SheetBonus> = emptyList(),
     val damageBonuses: List<SheetBonus> = emptyList(),
     val notes: String = "",
-)
+) {
+    /** Arma adaptável com dano próprio para as duas mãos, como a espada bastarda (p. 143, 147). */
+    val canUseTwoHanded: Boolean get() = WeaponDamage.hasTwoHandedDamage(damageDice)
+
+    /** Dados de dano para a empunhadura escolhida; sem adaptável, sempre o primeiro dano. */
+    fun damageDiceFor(twoHanded: Boolean): String = WeaponDamage.forGrip(damageDice, twoHanded)
+}
 
 data class SheetItem(
     val name: String,

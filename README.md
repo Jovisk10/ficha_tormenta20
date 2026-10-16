@@ -35,7 +35,7 @@ O app calcula sozinho os valores da ficha (perícias, Defesa, PV, PM, ataques, c
   - **Classes:** Arcanista (com os caminhos Bruxo, Feiticeiro e Mago), Bardo, Bucaneiro, Druida e Guerreiro. Preenche PV, PM, atributo de magia e perícias fixas.
   - **Raças:** Dahllan, Elfo, Humano, Lefou e Qareen. Adiciona habilidades, deslocamento e bônus.
   - **Origens:** Artista, Assistente de Laboratório, Marujo, Selvagem e Soldado.
-  - **Magias de 1º e 2º círculos** (100), já filtradas pelo que o personagem pode aprender: tipo (arcana ou divina), escolas escolhidas e círculo liberado pelo nível.
+  - **Magias de 1º e 2º círculos** (101), já filtradas pelo que o personagem pode aprender: tipo (arcana ou divina), escolas escolhidas e círculo liberado pelo nível.
   - **Armas** (40), **armaduras e escudos** (12) e **itens gerais** (mais de 100), com dano, crítico, alcance, preço e espaços.
 
 **Fichas**

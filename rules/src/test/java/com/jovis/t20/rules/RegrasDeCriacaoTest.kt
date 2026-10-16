@@ -276,7 +276,7 @@ class PericiasRepetidasTest {
     }
 
     @Test
-    fun `deformidade pode repetir pericias treinadas e ser trocada`() {
+    fun `deformidade pode repetir pericias treinadas e ser trocada`() { // p. 24
         var s = CatalogApply.setSkillGroup(lefouBardo(), SkillGroupId.RACE_BONUS, setOf(Skill.ATUACAO, Skill.REFLEXOS))
         assertEquals(setOf(Skill.ATUACAO, Skill.REFLEXOS), s.skillPicks!!.raceBonus)
         s = SheetCodec.decode(SheetCodec.encode(s))

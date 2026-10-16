@@ -544,14 +544,7 @@ fun EditSheetScreen(
             SkillGroupDialog(
                 group = group,
                 blockedReason = { skill -> CatalogApply.blockedReason(draft, groupId, skill) },
-                onToggle = { skill, on ->
-                    val selected = when {
-                        on && group.limit == 1 -> setOf(skill)
-                        on -> group.selected + skill
-                        else -> group.selected - skill
-                    }
-                    draft = CatalogApply.setSkillGroup(draft, groupId, selected)
-                },
+                onToggle = { skill, on -> draft = CatalogApply.toggleSkill(draft, groupId, skill, on) },
                 onDismiss = { skillGroupDialog = null },
             )
         }

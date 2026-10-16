@@ -29,7 +29,7 @@ class DiceTest {
     }
 
     @Test
-    fun `20 natural e 1 natural`() {
+    fun `20 natural e 1 natural`() { // p. 221
         val roller = DiceRoller(FixedRandom(20, 1))
         val vinte = roller.test("Atuação", 7, RollKind.SKILL)
         assertTrue(vinte.isNatural20)
@@ -39,7 +39,7 @@ class DiceTest {
     }
 
     @Test
-    fun `ameaca de critico usa a margem da arma`() {
+    fun `ameaca de critico usa a margem da arma`() { // p. 142
         val roller = DiceRoller(FixedRandom(19, 18))
         val ficha = SampleSheets.SEDAF.copy(weapons = listOf(SheetWeapon("Espada longa", "1d8", AttackMode.MELEE, criticalRange = 19)))
         assertTrue(SheetRolls.attack(roller, ficha, ficha.weapons[0]).isThreat)
@@ -47,13 +47,20 @@ class DiceTest {
     }
 
     @Test
-    fun `dano critico multiplica os dados mas nao o bonus`() {
+    fun `dano critico multiplica os dados mas nao o bonus`() { // p. 142
         val ficha = SampleSheets.SEDAF.copy(weapons = listOf(SheetWeapon("Machado", "1d8", AttackMode.MELEE, criticalMultiplier = 3)))
         val roller = DiceRoller(FixedRandom(5, 6, 7))
         val dano = assertNotNull(SheetRolls.damage(roller, ficha, ficha.weapons[0], critical = true))
         assertEquals("3d8+2", dano.formula.text) // Força 2 não é multiplicada
         assertEquals(5 + 6 + 7 + 2, dano.total)
         assertTrue(dano.critical)
+    }
+
+    @Test
+    fun `critico multiplica so os dados da arma, nao os dados extras`() { // p. 142
+        val formula = DiceParser.parse("1d8+1d6+3")!!
+        assertEquals("2d8+1d6+3", formula.criticalOf(2).text)
+        assertEquals("3d8+1d6+3", formula.criticalOf(3).text)
     }
 
     @Test

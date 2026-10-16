@@ -9,6 +9,23 @@ enum class WeaponPurpose { MELEE, THROWN, FIRING }
 /** Como o ataque está sendo feito agora. Uma lança pode atacar corpo a corpo ou ser arremessada. */
 enum class AttackMode { MELEE, THROWN, FIRING }
 
+/**
+ * Danos com barra. Armas adaptáveis (p. 143), como a espada bastarda e a katana (p. 147-148),
+ * mostram "1d10/1d12": o segundo dano vale com as duas mãos. Nas armas duplas (bordão, corrente
+ * de espinhos, p. 143) a barra separa o dano de cada ponta e os dois valores são iguais; por isso
+ * só há dano de duas mãos quando os dois lados diferem.
+ */
+object WeaponDamage {
+    fun hasTwoHandedDamage(damageDice: String): Boolean {
+        val parts = damageDice.split('/').map { it.replace(" ", "").lowercase() }
+        return parts.size == 2 && parts.all { it.isNotEmpty() } && parts[0] != parts[1]
+    }
+
+    fun forGrip(damageDice: String, twoHanded: Boolean): String =
+        if (twoHanded && hasTwoHandedDamage(damageDice)) damageDice.substringAfter('/').trim()
+        else damageDice.substringBefore('/').trim()
+}
+
 data class WeaponDefinition(
     override val name: String,
     val proficiency: WeaponProficiency,
@@ -21,6 +38,8 @@ data class WeaponDefinition(
     /** Armas corpo a corpo que também podem ser arremessadas (ex.: lança). */
     val canBeThrown: Boolean = false,
     override val slots: Double = 1.0,
+    /** Exótica com uma mão, mas marcial com as duas (espada bastarda, katana, machado anão; p. 147-149). */
+    val martialWhenTwoHanded: Boolean = false,
 ) : Item {
     val allowedModes: Set<AttackMode>
         get() = when (purpose) {

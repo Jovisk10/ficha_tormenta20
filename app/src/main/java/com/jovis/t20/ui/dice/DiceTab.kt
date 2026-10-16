@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.jovis.t20.ui.sheet.CollapsibleSection
+import com.jovis.t20.ui.sheet.GripSelector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -112,8 +114,8 @@ fun DiceTab(
 
     // Pedaços da aba, usados tanto no layout de uma coluna quanto no de duas
     val stage: @Composable () -> Unit = {
-        DiceStage(sheet, last, animatedRollId, onAnimated) { weapon, critical ->
-            roll(SheetRolls.damage(roller, sheet, weapon, critical))
+        DiceStage(sheet, last, animatedRollId, onAnimated) { weapon, critical, twoHanded ->
+            roll(SheetRolls.damage(roller, sheet, weapon, critical, twoHanded))
         }
     }
     // Seções recolhíveis, iguais às da ficha
@@ -198,21 +200,30 @@ private fun AttackRolls(sheet: ManualSheet, roller: DiceRoller, roll: (RollRecor
             Hint("Nenhum ataque na ficha. Adicione em Editar.")
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            sheet.weapons.forEach { weapon ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(weapon.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Ataque ${signed(SheetEngine.attackBonus(sheet, weapon).total)}, dano ${SheetEngine.damageText(sheet, weapon)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            // Chave pelo índice: armas de mesmo nome não colidem
+            sheet.weapons.forEachIndexed { i, weapon -> key(i) {
+                // Empunhadura só da tela, por arma; padrão "Uma mão"
+                var twoHanded by rememberSaveable { mutableStateOf(false) }
+                val useTwoHands = twoHanded && weapon.canUseTwoHanded
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(weapon.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Ataque ${signed(SheetEngine.attackBonus(sheet, weapon).total)}, dano ${SheetEngine.damageText(sheet, weapon, useTwoHands)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Button(onClick = { roll(SheetRolls.attack(roller, sheet, weapon, useTwoHands, weaponIndex = i)) }) { Text("Ataque") }
+                        Spacer(Modifier.size(6.dp))
+                        OutlinedButton(onClick = { roll(SheetRolls.damage(roller, sheet, weapon, twoHanded = useTwoHands)) }) { Text("Dano") }
                     }
-                    Button(onClick = { roll(SheetRolls.attack(roller, sheet, weapon)) }) { Text("Ataque") }
-                    Spacer(Modifier.size(6.dp))
-                    OutlinedButton(onClick = { roll(SheetRolls.damage(roller, sheet, weapon)) }) { Text("Dano") }
+                    if (weapon.canUseTwoHanded) {
+                        GripSelector(twoHanded, onChange = { twoHanded = it })
+                    }
                 }
-            }
+            } }
         }
     }
 }
@@ -306,7 +317,7 @@ private fun DiceStage(
     roll: RollRecord?,
     animatedRollId: Long,
     onAnimated: (Long) -> Unit,
-    onDamage: (SheetWeapon, Boolean) -> Unit,
+    onDamage: (weapon: SheetWeapon, critical: Boolean, twoHanded: Boolean) -> Unit,
 ) {
     // Anima só rolagens novas; ao voltar para a aba, o dado já aparece parado
     val animate = roll != null && roll.id != animatedRollId
@@ -361,13 +372,15 @@ private fun DiceStage(
                     Text(text, style = MaterialTheme.typography.titleSmall, color = color(), textAlign = TextAlign.Center)
                 }
                 // Depois de um ataque, o dano está a um toque
-                weaponOf(sheet, roll)?.let { weapon ->
+                // Mesma empunhadura do ataque
+                test?.let { SheetRolls.weaponOf(sheet, it) }?.let { weapon ->
+                    val twoHanded = test.twoHanded
                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (test?.isThreat == true) {
-                            Button(onClick = { onDamage(weapon, true) }) { Text("Dano crítico (x${weapon.criticalMultiplier})") }
-                            OutlinedButton(onClick = { onDamage(weapon, false) }) { Text("Dano normal") }
+                            Button(onClick = { onDamage(weapon, true, twoHanded) }) { Text("Dano crítico (x${weapon.criticalMultiplier})") }
+                            OutlinedButton(onClick = { onDamage(weapon, false, twoHanded) }) { Text("Dano normal") }
                         } else {
-                            Button(onClick = { onDamage(weapon, false) }) { Text("Rolar dano") }
+                            Button(onClick = { onDamage(weapon, false, twoHanded) }) { Text("Rolar dano") }
                         }
                     }
                 }
@@ -378,10 +391,6 @@ private fun DiceStage(
         }
     }
 }
-
-/** A arma de um teste de ataque, para o palco oferecer o dano em seguida. */
-private fun weaponOf(sheet: ManualSheet, roll: RollRecord): SheetWeapon? =
-    if (roll is TestRoll && roll.kind == RollKind.ATTACK) sheet.weapons.firstOrNull { "Ataque: ${it.name}" == roll.label } else null
 
 
 /** Destaques do resultado: 20 natural, 1 natural, ameaça de crítico e dano crítico. */

@@ -17,8 +17,12 @@ data class DiceFormula(val terms: List<DiceTerm>, val modifier: Int = 0) {
     /** O dado principal, usado para escolher o desenho na animação. */
     val mainSides: Int get() = terms.firstOrNull()?.sides ?: 20
 
-    /** No crítico, multiplicam-se só os dados, não os bônus numéricos (p. 142). */
-    fun criticalOf(multiplier: Int): DiceFormula = copy(terms = terms.map { it.copy(count = it.count * multiplier) })
+    /**
+     * No crítico, multiplicam-se só os dados da arma (o primeiro termo); bônus numéricos
+     * e dados extras, como Ataque Furtivo, não são multiplicados (p. 142).
+     */
+    fun criticalOf(multiplier: Int): DiceFormula =
+        copy(terms = terms.mapIndexed { i, t -> if (i == 0) t.copy(count = t.count * multiplier) else t })
 }
 
 object DiceParser {
@@ -78,6 +82,10 @@ data class TestRoll(
     val bonus: Int,
     /** Margem de ameaça da arma (só em ataques). */
     val threatFrom: Int? = null,
+    /** Posição da arma em `sheet.weapons` no momento do ataque (só em ataques). Ver [SheetRolls.weaponOf]. */
+    val weaponIndex: Int? = null,
+    /** Ataque feito com a arma adaptável nas duas mãos (p. 143). */
+    val twoHanded: Boolean = false,
 ) : RollRecord {
     override val total: Int get() = natural + bonus
     val isNatural20: Boolean get() = natural == 20
@@ -132,21 +140,57 @@ object SheetRolls {
     fun attribute(roller: DiceRoller, sheet: ManualSheet, attribute: Attribute): TestRoll =
         roller.test(attribute.displayName, SheetEngine.attribute(sheet, attribute), RollKind.ATTRIBUTE)
 
-    fun attack(roller: DiceRoller, sheet: ManualSheet, weapon: SheetWeapon): TestRoll =
-        roller.test("Ataque: ${weapon.name}", SheetEngine.attackBonus(sheet, weapon).total, RollKind.ATTACK, weapon.criticalRange)
+    /**
+     * [twoHanded]: empunhar uma arma adaptável com as duas mãos (p. 143). Só muda o rótulo; a ficha
+     * manual não controla proficiência, então não há –5 a remover aqui. O teste guarda a empunhadura
+     * efetiva (só vale em arma que pode ser usada com as duas mãos).
+     *
+     * [weaponIndex]: posição da arma em `sheet.weapons`. Se não vier, procura a própria instância
+     * da arma na lista (por identidade, não por igualdade, para distinguir duas armas iguais).
+     */
+    fun attack(
+        roller: DiceRoller,
+        sheet: ManualSheet,
+        weapon: SheetWeapon,
+        twoHanded: Boolean = false,
+        weaponIndex: Int? = null,
+    ): TestRoll {
+        val grip = twoHanded && weapon.canUseTwoHanded
+        val index = weaponIndex?.takeIf { it in sheet.weapons.indices }
+            ?: sheet.weapons.indexOfFirst { it === weapon }.takeIf { it >= 0 }
+        return roller.test("Ataque: ${weapon.name}${gripSuffix(weapon, twoHanded)}", SheetEngine.attackBonus(sheet, weapon).total, RollKind.ATTACK, weapon.criticalRange)
+            .copy(weaponIndex = index, twoHanded = grip)
+    }
 
-    /** Fórmula do dano da arma, com os bônus fixos da ficha (ex.: Força). */
-    fun damageFormula(sheet: ManualSheet, weapon: SheetWeapon): DiceFormula? {
-        val base = DiceParser.parse(weapon.damageDice) ?: return null
+    /**
+     * A arma de um teste de ataque, pelo índice guardado em [TestRoll.weaponIndex].
+     * Não compara rótulos: funciona com armas de mesmo nome e com arma renomeada depois do ataque.
+     * Devolve null se não for ataque, se o ataque não tiver índice ou se o índice não existir mais
+     * na lista (arma apagada). Se a lista foi reordenada, o índice aponta para a arma que está
+     * naquela posição agora; o histórico vive só na memória, então isso só ocorre ao editar as armas
+     * no meio da sessão.
+     */
+    fun weaponOf(sheet: ManualSheet, roll: TestRoll): SheetWeapon? {
+        if (roll.kind != RollKind.ATTACK) return null
+        return roll.weaponIndex?.let { sheet.weapons.getOrNull(it) }
+    }
+
+    /** Fórmula do dano da arma, com os bônus fixos da ficha (ex.: Força). Com as duas mãos, usa o segundo dano (p. 143). */
+    fun damageFormula(sheet: ManualSheet, weapon: SheetWeapon, twoHanded: Boolean = false): DiceFormula? {
+        val base = DiceParser.parse(weapon.damageDiceFor(twoHanded)) ?: return null
         return base.copy(modifier = base.modifier + SheetEngine.damageBonus(sheet, weapon).total)
     }
 
-    fun damage(roller: DiceRoller, sheet: ManualSheet, weapon: SheetWeapon, critical: Boolean = false): DiceRoll? {
-        val formula = damageFormula(sheet, weapon) ?: return null
+    fun damage(roller: DiceRoller, sheet: ManualSheet, weapon: SheetWeapon, critical: Boolean = false, twoHanded: Boolean = false): DiceRoll? {
+        val formula = damageFormula(sheet, weapon, twoHanded) ?: return null
         val final = if (critical) formula.criticalOf(weapon.criticalMultiplier) else formula
-        val label = if (critical) "Dano crítico: ${weapon.name}" else "Dano: ${weapon.name}"
+        val name = "${weapon.name}${gripSuffix(weapon, twoHanded)}"
+        val label = if (critical) "Dano crítico: $name" else "Dano: $name"
         return roller.roll(label, final, RollKind.DAMAGE, critical)
     }
+
+    private fun gripSuffix(weapon: SheetWeapon, twoHanded: Boolean): String =
+        if (twoHanded && weapon.canUseTwoHanded) " (duas mãos)" else ""
 }
 
 private fun spaced(value: Int): String = if (value >= 0) "+ $value" else "− ${-value}"

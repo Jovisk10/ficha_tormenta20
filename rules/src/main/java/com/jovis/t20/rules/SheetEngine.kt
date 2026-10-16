@@ -157,6 +157,17 @@ object SheetEngine {
         }
     }
 
+    /** Dano para a empunhadura escolhida: com as duas mãos, armas adaptáveis usam o segundo dano (p. 143). */
+    fun damageText(sheet: ManualSheet, weapon: SheetWeapon, twoHanded: Boolean): String {
+        val dice = weapon.damageDiceFor(twoHanded)
+        val bonus = damageBonus(sheet, weapon).total
+        return when {
+            bonus > 0 -> "$dice+$bonus"
+            bonus < 0 -> "$dice$bonus"
+            else -> dice
+        }
+    }
+
     fun criticalText(weapon: SheetWeapon): String = "${weapon.criticalRange}/x${weapon.criticalMultiplier}"
 
     // ---------- Magias (p. 170, 227) ----------

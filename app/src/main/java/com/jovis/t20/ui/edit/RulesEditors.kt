@@ -254,9 +254,8 @@ fun SkillGroupDialog(
                     val sorted = Skill.entries.sortedBy { if (it in group.selected || blockedReason(it) == null) 0 else 1 }
                     sorted.forEach { skill ->
                         val selected = skill in group.selected
-                        // Em grupos de uma escolha só (ex.: Luta ou Pontaria), tocar em outra opção troca a escolha
-                        val swap = group.limit == 1 && skill in group.allowed && !selected && group.selected.isNotEmpty()
-                        val reason = if (swap) null else blockedReason(skill)
+                        // blockedReason já libera a troca em grupos de uma vaga (ex.: Luta ou Pontaria)
+                        val reason = blockedReason(skill)
                         val enabled = selected || reason == null
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp)

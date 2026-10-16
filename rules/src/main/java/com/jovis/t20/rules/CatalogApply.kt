@@ -206,7 +206,13 @@ object CatalogApply {
         return groups
     }
 
-    /** Por que uma perícia não pode ser marcada num grupo, ou null se pode. */
+    /**
+     * Por que uma perícia não pode ser marcada num grupo, ou null se pode.
+     *
+     * Controle interno do app, não regra do livro: num grupo de uma vaga que já tem escolha
+     * (ex.: Luta ou Pontaria do guerreiro), marcar outra opção permitida troca a escolha
+     * (ver [toggleSkill]), então o limite não bloqueia. Os outros bloqueios continuam valendo.
+     */
     fun blockedReason(sheet: ManualSheet, groupId: SkillGroupId, skill: Skill): String? {
         val groups = skillGroups(sheet)
         val group = groups.firstOrNull { it.id == groupId } ?: return "Grupo indisponível."
@@ -219,8 +225,28 @@ object CatalogApply {
                 it.grantsTraining && it.id != groupId && it.id != SkillGroupId.OTHER && skill in it.selected
             }?.let { return "Já treinada: ${it.title.lowercase()}." }
         }
+        if (isSwap(group)) return null
         if (group.remaining != null && group.remaining!! <= 0) return "Limite deste grupo atingido."
         return null
+    }
+
+    /** Grupo de uma vaga já preenchida: marcar outra opção troca a escolha. */
+    private fun isSwap(group: SkillGroup): Boolean = group.limit == 1 && group.selected.isNotEmpty()
+
+    /**
+     * Marca ([on] = true) ou desmarca uma perícia num grupo e recalcula a ficha.
+     * Em grupos de uma vaga, marcar substitui a escolha anterior (controle interno, não regra do livro).
+     * Não confere [blockedReason]: a tela só oferece o que pode ser marcado, e [recomputeSkills]
+     * já descarta o que passar do limite ou repetir outro grupo.
+     */
+    fun toggleSkill(sheet: ManualSheet, groupId: SkillGroupId, skill: Skill, on: Boolean): ManualSheet {
+        val group = skillGroups(sheet).firstOrNull { it.id == groupId } ?: return sheet
+        val selected = when {
+            on && group.limit == 1 -> setOf(skill)
+            on -> group.selected + skill
+            else -> group.selected - skill
+        }
+        return setSkillGroup(sheet, groupId, selected)
     }
 
     fun setSkillGroup(sheet: ManualSheet, groupId: SkillGroupId, selected: Set<Skill>): ManualSheet {
@@ -247,6 +273,8 @@ object CatalogApply {
         val int = maxOf(0, sheet.attributes[Attribute.INTELIGENCIA] ?: 0)
         // Cada perícia só pode ser treinada por um grupo. Em caso de repetição, fica no grupo de maior
         // prioridade (classe, origem, raça, Inteligência, outras fontes) e sai dos demais, liberando a vaga.
+        // Essa ordem é controle interno do app, não regra do livro: a classe vem primeiro porque suas
+        // listas são as mais restritas, e "outras fontes" por último porque é o grupo livre, sem limite.
         val taken = cls.fixedSkills.toMutableSet()
         fun keep(skills: Collection<Skill>, limit: Int = Int.MAX_VALUE): Set<Skill> =
             skills.filter { it !in taken }.take(limit).toSet().also { taken += it }
